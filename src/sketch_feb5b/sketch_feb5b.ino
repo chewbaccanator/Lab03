@@ -57,7 +57,7 @@ const int in4 = 6;
 const int baseSpeed = 200;
 
 // You said it veers LEFT -> right wheel effectively faster -> slow RIGHT motor
-const int rightTrim = -25;
+const int rightTrim = -0;
 const int leftTrim  = -0;
 
 const int turnSpeed = 180; // manual pivot turn speed

@@ -1,0 +1,6 @@
+t_ms,photo,leftTicks,rightTicks,dLeft,dRight,mode,cmd,leftPWM,rightPWM,frontCm,rightCm,wallState
+7007,344,0,0,0,0,M,x,0,0,38.0,15.0,N
+8007,343,0,0,0,0,M,x,0,0,38.1,15.0,N
+9007,344,0,0,0,0,M,x,0,0,38.0,15.0,N
+10007,343,0,0,0,0,M,x,0,0,38.1,15.0,N
+11007,356,7,7,7,7,F,f,129,129,41.2,15.3,N
