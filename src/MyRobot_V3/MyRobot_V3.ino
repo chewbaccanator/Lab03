@@ -1,9 +1,10 @@
-#include <WiFiS3.h>
+// ===== USB (Serial) version of your WiFi sketch =====
+// Control chars come in over USB serial: U D L R S
+// Telemetry now includes photocell info:
+// t_ms,encL,encR,ticksL,ticksR,lastCmdAge_ms,photo,onTape
 
-char ssid[] = "SHAW-F4E1";
-char pass[] = "charge8277enter";
-
-WiFiServer server(5200);
+const int PHOTO_PIN = A0;
+int photoThreshold = 500; // tune this
 
 // ===== L298N pins (match your wiring) =====
 const int ENA = 9;
@@ -33,16 +34,18 @@ int lastEncR = HIGH;
 unsigned long lastPrintMs = 0;
 const unsigned long printEveryMs = 20; // ~50 Hz logging (adjust)
 
-// Optional: print raw encoder states too
-void printTelemetry(int encL, int encR) {
-  // CSV-like: time_ms,encL,encR,ticksL,ticksR,lastCmdAge_ms
+// Telemetry now includes photo + onTape
+void printTelemetry(int encL, int encR, int photo, bool onTape) {
+  // CSV-like: time_ms,encL,encR,ticksL,ticksR,lastCmdAge_ms,photo,onTape
   unsigned long now = millis();
   Serial.print(now); Serial.print(',');
   Serial.print(encL); Serial.print(',');
   Serial.print(encR); Serial.print(',');
   Serial.print(ticksL); Serial.print(',');
   Serial.print(ticksR); Serial.print(',');
-  Serial.println(now - lastCmdTime);
+  Serial.print(now - lastCmdTime); Serial.print(',');
+  Serial.print(photo); Serial.print(',');
+  Serial.println(onTape ? 1 : 0);
 }
 
 void setup() {
@@ -56,36 +59,30 @@ void setup() {
 
   stopMotors();
 
-  // Encoders: use pullups, same idea as the lab example  [oai_citation:3‡Lab 04. Distance Measurement.pdf](sediment://file_00000000704471f5829a997e872b6c62)
+  // Encoders: use pullups, same idea as the lab example
   pinMode(ENC_L, INPUT_PULLUP);
   pinMode(ENC_R, INPUT_PULLUP);
+
+  // Photocell
+  pinMode(PHOTO_PIN, INPUT);
 
   Serial.begin(115200);
 
   // Print a header once so logs are self-describing
-  Serial.println("t_ms,encL,encR,ticksL,ticksR,lastCmdAge_ms");
-
-  WiFi.begin(ssid, pass);
-  delay(2000);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Connecting to WiFi...");
-  }
-
-  Serial.println("Connected!");
-  Serial.print("Arduino IP: ");
-  Serial.println(WiFi.localIP());
-
-  server.begin();
-  Serial.println("Server started on port 5200");
+  Serial.println("t_ms,encL,encR,ticksL,ticksR,lastCmdAge_ms,photo,onTape");
+  Serial.println("USB Serial control ready (send U/D/L/R/S).");
 
   lastCmdTime = millis(); // initialize
 }
 
 void loop() {
-  // --- Always read encoders + update tick counts (even if no client) ---
+  // --- Always read encoders + update tick counts ---
   int encL = digitalRead(ENC_L);
   int encR = digitalRead(ENC_R);
+
+  // --- Read photocell ---
+  int photo = analogRead(PHOTO_PIN);
+  bool onTape = (photo > photoThreshold);  // flip to (photo < photoThreshold) if needed
 
   // Count rising edges (LOW -> HIGH) to avoid double counting
   if (lastEncL == LOW && encL == HIGH) ticksL++;
@@ -93,54 +90,25 @@ void loop() {
   lastEncL = encL;
   lastEncR = encR;
 
-  // Print telemetry at a steady rate (lab wants nice delimited output)  [oai_citation:4‡Lab 04. Distance Measurement.pdf](sediment://file_00000000704471f5829a997e872b6c62)
+  // Print telemetry at a steady rate (nice delimited output)
   unsigned long now = millis();
   if (now - lastPrintMs >= printEveryMs) {
     lastPrintMs = now;
-    printTelemetry(encL, encR);
+    printTelemetry(encL, encR, photo, onTape);
   }
 
-  // --- WiFi client handling (unchanged logic, but non-blocking style) ---
-  WiFiClient client = server.available();
-  if (client) {
-    Serial.println("Client connected");
-
-    while (client.connected()) {
-      // Keep updating encoders and printing telemetry while connected too
-      encL = digitalRead(ENC_L);
-      encR = digitalRead(ENC_R);
-
-      if (lastEncL == LOW && encL == HIGH) ticksL++;
-      if (lastEncR == LOW && encR == HIGH) ticksR++;
-      lastEncL = encL;
-      lastEncR = encR;
-
-      now = millis();
-      if (now - lastPrintMs >= printEveryMs) {
-        lastPrintMs = now;
-        printTelemetry(encL, encR);
-      }
-
-      if (client.available()) {
-        char cmd = client.read();
-        handleCommand(cmd);
-        lastCmdTime = millis();
-      }
-
-      if (millis() - lastCmdTime > timeoutMs) {
-        stopMotors();
-      }
+  // --- USB Serial handling (replaces WiFi client handling) ---
+  if (Serial.available() > 0) {
+    char cmd = Serial.read();
+    if (cmd != '\n' && cmd != '\r') {
+      handleCommand(cmd);
+      lastCmdTime = millis();
     }
+  }
 
-    client.stop();
+  // Dead-man stop (same idea as before)
+  if (millis() - lastCmdTime > timeoutMs) {
     stopMotors();
-    Serial.println("Client disconnected");
-  } else {
-    // If no client is connected, still enforce dead-man stop.
-    // This prevents the robot from running forever if a client disconnects abruptly.
-    if (millis() - lastCmdTime > timeoutMs) {
-      stopMotors();
-    }
   }
 }
 

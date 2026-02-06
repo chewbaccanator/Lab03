@@ -1,12 +1,11 @@
-import java.net.*;
-import java.io.*;
+import processing.serial.*;
 
-Socket socket;
-OutputStream out;
+Serial serialPort;
 boolean connected = false;
 
-String arduinoIP = "10.0.0.62"; // <<< PUT REAL IP HERE
-int port = 5200;
+// Choose the Arduino serial port here (see console output from Serial.list())
+int portIndex = 0;      // <<< CHANGE THIS if needed
+int baud = 115200;
 
 void setup() {
   size(420, 220);
@@ -24,18 +23,28 @@ void draw() {
     text("CONNECTED\nWASD to drive\nRelease to stop",
          width/2, height/2);
   } else {
-    text("NOT CONNECTED\nCheck IP / WiFi",
+    text("NOT CONNECTED\nCheck USB / port",
          width/2, height/2);
   }
 }
 
 void connectToArduino() {
   try {
+    println("Available serial ports:");
+    println(Serial.list());
+
     println("Connecting to Arduino...");
-    socket = new Socket(arduinoIP, port);
-    out = socket.getOutputStream();
+    String portName = Serial.list()[portIndex];
+    serialPort = new Serial(this, portName, baud);
+
+    // On many boards, opening Serial resets the Arduino.
+    // Clear any boot text.
+    serialPort.clear();
+    delay(400);
+
     connected = true;
     println("Connected!");
+    println("Port: " + portName);
   } catch (Exception e) {
     println("Connection failed");
     e.printStackTrace();
@@ -49,12 +58,11 @@ void keyPressed() {
   try {
     char k = Character.toLowerCase(key);
 
-    if (k == 'w') out.write('U');
-    else if (k == 's') out.write('D');
-    else if (k == 'a') out.write('L');
-    else if (k == 'd') out.write('R');
+    if (k == 'w') serialPort.write('U');
+    else if (k == 's') serialPort.write('D');
+    else if (k == 'a') serialPort.write('L');
+    else if (k == 'd') serialPort.write('R');
 
-    out.flush();
   } catch (Exception e) {
     connected = false;
   }
@@ -64,8 +72,7 @@ void keyReleased() {
   if (!connected) return;
 
   try {
-    out.write('S');
-    out.flush();
+    serialPort.write('S');
   } catch (Exception e) {
     connected = false;
   }

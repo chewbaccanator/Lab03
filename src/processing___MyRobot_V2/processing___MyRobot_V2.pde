@@ -23,7 +23,8 @@ void draw() {
   if (connected) {
     text("CONNECTED\nWASD to drive\nRelease to stop",
          width/2, height/2);
-  } else {
+  } 
+  else {
     text("NOT CONNECTED\nCheck IP / WiFi",
          width/2, height/2);
   }
